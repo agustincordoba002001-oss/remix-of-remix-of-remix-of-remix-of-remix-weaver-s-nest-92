@@ -519,6 +519,19 @@ export function Editor() {
                     <Button
                       variant="ghost"
                       className="h-9 text-sm"
+                      disabled={!sonido || transcribiendo !== null}
+                      onClick={() => void transcribirUna(i)}
+                    >
+                      {transcribiendo === i ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <FileText className="mr-2 h-4 w-4" />
+                      )}
+                      Escribir lo que dice
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      className="h-9 text-sm"
                       disabled={probando === i}
                       onClick={() => void probar(i, ajustes[i])}
                     >
