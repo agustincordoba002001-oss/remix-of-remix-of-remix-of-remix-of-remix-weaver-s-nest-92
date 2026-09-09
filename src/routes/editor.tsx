@@ -20,7 +20,7 @@ import {
   type AjusteVoz,
   type Expresion,
 } from "@/lib/voz-imitada";
-import { leerTramos, pedazoWavBase64, type Sonido } from "@/lib/leer-video";
+import { leerTramos, pedazoWavBase64 } from "@/lib/leer-video";
 
 
 export const Route = createFileRoute("/editor")({
