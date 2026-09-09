@@ -165,6 +165,71 @@ export function Editor() {
     }
   }
 
+  /** Escucha una frase del video y escribe ahí lo que se dice. */
+  async function escribirFrase(i: number) {
+    if (!sonido) return;
+    const f = frases[i]!;
+    const wav = pedazoWavBase64(sonido, Math.max(0, f.t0 - 0.15), f.t1 + 0.15);
+    const r = await pedirTexto({ data: { wav } });
+    if (r.texto) {
+      setFrases((prev) => {
+        const next = [...prev];
+        next[i] = { ...next[i]!, txt: r.texto };
+        return next;
+      });
+      setOriginal((prev) => {
+        const next = [...prev];
+        if (!next[i]) next[i] = r.texto;
+        return next;
+      });
+    }
+    return r.texto;
+  }
+
+  /** Escribe una sola frase, a pedido. */
+  async function transcribirUna(i: number) {
+    setTranscribiendo(i);
+    try {
+      const t = await escribirFrase(i);
+      if (!t) toast.info("En esa parte no se escucha voz");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No pude escuchar esa parte");
+    } finally {
+      setTranscribiendo(null);
+    }
+  }
+
+  /** Escribe todo el video, frase por frase, y se puede frenar cuando quieras. */
+  async function transcribirTodo() {
+    if (!sonido || !frases.length) {
+      toast.error("Primero leé el video");
+      return;
+    }
+    cortar.current = false;
+    setTranscribiendo(-1);
+    setAvance(0);
+    try {
+      for (let i = 0; i < frases.length; i++) {
+        if (cortar.current) break;
+        try {
+          await escribirFrase(i);
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : "";
+          if (msg.includes("esperar")) {
+            await new Promise((r) => setTimeout(r, 4000));
+            i--;
+            continue;
+          }
+          toast.error(msg || "No pude seguir escuchando");
+          break;
+        }
+        setAvance(i + 1);
+      }
+      toast.success("Listo: ya podés editar lo que dice cada frase");
+    } finally {
+      setTranscribiendo(null);
+    }
+  }
 
   /** Mientras el video corre, marca la frase de ese segundo (sin mover la lista). */
   const seguirTiempo = useCallback(() => {
