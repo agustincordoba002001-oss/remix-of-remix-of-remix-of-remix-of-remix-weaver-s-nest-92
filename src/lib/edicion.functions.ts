@@ -69,15 +69,21 @@ export type Frase = { t0: number; t1: number; txt: string };
 
 /** Lista los guiones con marcas de tiempo que hay guardados en el proyecto. */
 export const listarGuiones = createServerFn({ method: "GET" }).handler(async () => {
-  const { readdir, stat } = await import("node:fs/promises");
+  const { readdir, readFile } = await import("node:fs/promises");
   const base = "/mnt/documents";
-  const salida: { id: string; nombre: string; frases: number }[] = [];
+  const salida: { id: string; nombre: string; frases: number; duracion: number }[] = [];
   try {
     for (const dir of await readdir(base)) {
-      const ruta = `${base}/${dir}/marks_full.json`;
       try {
-        const info = await stat(ruta);
-        if (info.isFile()) salida.push({ id: dir, nombre: dir, frases: 0 });
+        const txt = await readFile(`${base}/${dir}/marks_full.json`, "utf8");
+        const crudo = JSON.parse(txt) as Frase[];
+        if (!Array.isArray(crudo) || !crudo.length) continue;
+        salida.push({
+          id: dir,
+          nombre: dir,
+          frases: crudo.length,
+          duracion: crudo[crudo.length - 1]!.t1,
+        });
       } catch {
         /* esa carpeta no tiene marcas */
       }
@@ -87,6 +93,7 @@ export const listarGuiones = createServerFn({ method: "GET" }).handler(async () 
   }
   return salida;
 });
+
 
 /** Devuelve las frases con su minuto exacto para editarlas sobre el video. */
 export const cargarFrases = createServerFn({ method: "POST" })
