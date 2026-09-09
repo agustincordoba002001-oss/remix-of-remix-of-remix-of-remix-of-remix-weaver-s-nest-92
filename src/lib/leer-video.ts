@@ -1,41 +1,109 @@
 /**
- * Lee el audio del video que sube el usuario, en su propio navegador y gratis:
- * encuentra dónde habla y dónde calla, y devuelve un tramo por cada frase.
- * También deja el sonido listo para poder transcribir cada frase.
+ * Lee el audio del video que sube el usuario, en su propio navegador y gratis.
+ * Ahora funciona para cualquier duración: no carga todo el audio de una vez,
+ * sino que lo escucha mientras el video reproduce, y graba pedacitos cuando
+ * hace falta transcribir.
  */
 export type Tramo = { t0: number; t1: number };
 
-/** Sonido del video, en mono y liviano, para mandar frase por frase. */
-export type Sonido = { datos: Float32Array; sr: number };
+/** Indica si el navegador puede leer el audio del video en tiempo real. */
+export function soportaLecturaVideo(video: HTMLVideoElement): boolean {
+  return typeof (video as unknown as { captureStream?: () => MediaStream }).captureStream ===
+    "function";
+}
 
+/**
+ * Escucha el video completo, encuentra dónde habla y dónde calla, y devuelve
+ * un tramo por cada frase. No importa cuánto dure el video: nunca guarda todo
+ * el sonido en memoria.
+ */
 export async function leerTramos(
-  archivo: Blob,
+  video: HTMLVideoElement,
   avisar?: (p: number) => void,
-): Promise<{ duracion: number; tramos: Tramo[]; sonido: Sonido }> {
-  const buf = await archivo.arrayBuffer();
-  avisar?.(0.35);
-  const audio = await decodificar(buf);
-  avisar?.(0.7);
-
-  const data = audio.getChannelData(0);
-  const sr = audio.sampleRate;
-  const paso = Math.max(1, Math.floor(sr * 0.02)); // ventanas de 20 ms
-  const energias: number[] = [];
-  for (let i = 0; i + paso <= data.length; i += paso) {
-    let s = 0;
-    for (let j = i; j < i + paso; j++) s += data[j]! * data[j]!;
-    energias.push(Math.sqrt(s / paso));
+): Promise<{ duracion: number; tramos: Tramo[] }> {
+  const capture = (video as unknown as { captureStream?: () => MediaStream }).captureStream;
+  if (typeof capture !== "function") {
+    throw new Error(
+      "Este navegador no permite leer el audio del video. Usá Chrome, Edge o Firefox.",
+    );
   }
-  const sonido = aMono16k(data, sr);
-  avisar?.(0.85);
 
+  const stream = capture.call(video);
+  const audioTracks = stream.getAudioTracks();
+  if (!audioTracks.length) {
+    throw new Error("El video que subiste no tiene sonido");
+  }
+
+  const audioStream = new MediaStream(audioTracks);
+  const ctx = new AudioContext();
+  const src = ctx.createMediaStreamSource(audioStream);
+  const processor = ctx.createScriptProcessor(4096, 1, 1);
+
+  const energias: number[] = [];
+  const paso = processor.bufferSize;
+  const sr = ctx.sampleRate;
+
+  processor.onaudioprocess = (e) => {
+    const data = e.inputBuffer.getChannelData(0);
+    let s = 0;
+    for (let i = 0; i < data.length; i++) s += data[i]! * data[i]!;
+    energias.push(Math.sqrt(s / data.length));
+  };
+
+  src.connect(processor);
+  processor.connect(ctx.destination);
+
+  // Reproducimos rápido para no hacer esperar, pero sin pasarnos de lo que
+  // aguante el navegador. Si falla, volvemos a 1x.
+  const velocidad = Math.min(3, video.playbackRate || 1);
+  video.muted = true;
+  video.playbackRate = velocidad;
+
+  await video.play().catch(() => {
+    throw new Error("No pude reproducir el video. Probá de nuevo después de subirlo.");
+  });
+
+  return new Promise((resolve, reject) => {
+    const limpiar = () => {
+      clearInterval(poll);
+      void ctx.close();
+      processor.disconnect();
+      src.disconnect();
+      stream.getTracks().forEach((t) => t.stop());
+    };
+
+    const poll = setInterval(() => {
+      const dur = video.duration || 0;
+      if (dur > 0) avisar?.(Math.min(0.99, video.currentTime / dur));
+
+      if (video.ended || video.paused) {
+        limpiar();
+        const duracion = video.duration || (energias.length * paso) / sr;
+        const tramos = detectarTramos(energias, sr, paso);
+        avisar?.(1);
+        resolve({ duracion, tramos });
+      }
+    }, 250);
+
+    video.addEventListener(
+      "error",
+      () => {
+        limpiar();
+        reject(new Error("El video se cortó mientras lo leía. Probá con otro formato."));
+      },
+      { once: true },
+    );
+  });
+}
+
+function detectarTramos(energias: number[], sr: number, paso: number): Tramo[] {
   const orden = [...energias].sort((a, b) => a - b);
   const piso = orden[Math.floor(orden.length * 0.2)] ?? 0;
   const techo = orden[Math.floor(orden.length * 0.95)] ?? 1;
   const umbral = piso + (techo - piso) * 0.18;
 
-  const MIN_SILENCIO = 14; // ~0,28 s de silencio corta la frase
-  const MIN_FRASE = 40; // ~0,8 s mínimo por frase
+  const MIN_SILENCIO = 14; // ~0,28 s
+  const MIN_FRASE = 40; // ~0,8 s
   const tramos: Tramo[] = [];
   let inicio: number | null = null;
   let callado = 0;
@@ -58,47 +126,101 @@ export async function leerTramos(
   if (inicio !== null)
     tramos.push({ t0: (inicio * paso) / sr, t1: (energias.length * paso) / sr });
 
-  avisar?.(1);
-  return { duracion: audio.duration, tramos, sonido };
+  return tramos;
 }
 
-/**
- * Abre el sonido del archivo. Primero prueba en calidad chica (16.000 por
- * segundo, en un solo canal): así un video largo entra sin quedarse sin memoria.
- * Si el navegador no puede, prueba de la forma normal.
- */
-async function decodificar(buf: ArrayBuffer): Promise<AudioBuffer> {
-  const Offline: typeof OfflineAudioContext | undefined =
-    (window as unknown as { OfflineAudioContext?: typeof OfflineAudioContext })
-      .OfflineAudioContext ??
-    (window as unknown as { webkitOfflineAudioContext?: typeof OfflineAudioContext })
-      .webkitOfflineAudioContext;
-  if (Offline) {
-    try {
-      const off = new Offline(1, 16000, 16000);
-      return await off.decodeAudioData(buf.slice(0));
-    } catch {
-      /* probamos de la forma normal */
-    }
+/** Graba un pedazo del video y lo devuelve como WAV en base64. */
+export async function pedazoWavBase64(
+  video: HTMLVideoElement,
+  t0: number,
+  t1: number,
+): Promise<string> {
+  const capture = (video as unknown as { captureStream?: () => MediaStream }).captureStream;
+  if (typeof capture !== "function") {
+    throw new Error("Este navegador no puede grabar un pedazo del video.");
   }
-  const Ctx: typeof AudioContext | undefined =
-    (window as unknown as { AudioContext?: typeof AudioContext }).AudioContext ??
-    (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-  if (!Ctx) throw new Error("Este navegador no puede abrir el sonido del video");
-  const ctx = new Ctx();
+
+  const stream = capture.call(video);
+  const audioTracks = stream.getAudioTracks();
+  if (!audioTracks.length) throw new Error("El video no tiene sonido");
+
+  const audioStream = new MediaStream(audioTracks);
+  const mime =
+    MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+      ? "audio/webm;codecs=opus"
+      : MediaRecorder.isTypeSupported("audio/mp4")
+        ? "audio/mp4"
+        : "";
+  if (!mime) throw new Error("Este navegador no puede grabar audio del video.");
+
+  const recorder = new MediaRecorder(audioStream, { mimeType: mime });
+  const chunks: Blob[] = [];
+  recorder.ondataavailable = (e) => {
+    if (e.data.size) chunks.push(e.data);
+  };
+
+  return new Promise((resolve, reject) => {
+    const limpiar = () => {
+      stream.getTracks().forEach((t) => t.stop());
+    };
+
+    recorder.onstop = async () => {
+      try {
+        const blob = new Blob(chunks, { type: recorder.mimeType });
+        const wav = await blobAWavBase64(blob);
+        resolve(wav);
+      } catch (e) {
+        reject(e instanceof Error ? e : new Error("No pude convertir el audio"));
+      } finally {
+        limpiar();
+      }
+    };
+
+    recorder.onerror = () => {
+      limpiar();
+      reject(new Error("La grabación del pedazo falló"));
+    };
+
+    const desde = Math.max(0, t0 - 0.15);
+    const hasta = t1 + 0.15;
+
+    const onSeeked = () => {
+      video.removeEventListener("seeked", onSeeked);
+      recorder.start(100);
+      video.play().catch(() => {
+        recorder.stop();
+        reject(new Error("No pude reproducir el pedazo del video"));
+      });
+
+      const poll = setInterval(() => {
+        if (video.currentTime >= hasta || video.ended) {
+          clearInterval(poll);
+          video.pause();
+          recorder.stop();
+        }
+      }, 50);
+    };
+
+    video.addEventListener("seeked", onSeeked);
+    video.currentTime = desde;
+  });
+}
+
+async function blobAWavBase64(blob: Blob): Promise<string> {
+  const buf = await blob.arrayBuffer();
+  const ctx = new AudioContext();
   try {
-    return await ctx.decodeAudioData(buf.slice(0));
-  } catch {
-    throw new Error(
-      "No pude abrir el sonido de este archivo. Probá con un MP4 o MP3 del mismo video.",
-    );
+    const audio = await ctx.decodeAudioData(buf.slice(0));
+    const data = audio.getChannelData(0);
+    const son = aMono16k(data, audio.sampleRate);
+    return wavBase64(son);
   } finally {
     void ctx.close();
   }
 }
 
-/** Achica el sonido a 16.000 muestras por segundo, que es lo que hace falta. */
-function aMono16k(data: Float32Array, sr: number): Sonido {
+/** Achica el sonido a 16.000 muestras por segundo. */
+function aMono16k(data: Float32Array, sr: number): { datos: Float32Array; sr: number } {
   const destino = 16000;
   if (sr <= destino) return { datos: new Float32Array(data), sr };
   const paso = sr / destino;
@@ -108,11 +230,9 @@ function aMono16k(data: Float32Array, sr: number): Sonido {
   return { datos: out, sr: destino };
 }
 
-/** Arma un archivo de sonido (WAV) con el pedazo entre dos segundos. */
-export function pedazoWavBase64(sonido: Sonido, t0: number, t1: number) {
-  const desde = Math.max(0, Math.floor(t0 * sonido.sr));
-  const hasta = Math.min(sonido.datos.length, Math.ceil(t1 * sonido.sr));
-  const n = Math.max(0, hasta - desde);
+/** Arma un WAV mono 16 bit desde sonido ya en 16 kHz. */
+function wavBase64(sonido: { datos: Float32Array; sr: number }): string {
+  const n = sonido.datos.length;
   const buf = new ArrayBuffer(44 + n * 2);
   const v = new DataView(buf);
   const txt = (pos: number, s: string) => {
@@ -131,7 +251,7 @@ export function pedazoWavBase64(sonido: Sonido, t0: number, t1: number) {
   txt(36, "data");
   v.setUint32(40, n * 2, true);
   for (let i = 0; i < n; i++) {
-    const s = Math.max(-1, Math.min(1, sonido.datos[desde + i]!));
+    const s = Math.max(-1, Math.min(1, sonido.datos[i]!));
     v.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true);
   }
   let bin = "";
