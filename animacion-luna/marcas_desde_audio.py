@@ -1,7 +1,8 @@
 """Reconstruye las marcas de tiempo de cada frase a partir del audio ya narrado.
 
 Detecta los silencios del wav y elige, entre todos ellos, los cortes que mejor
-coinciden con el largo de cada frase del guion. Guarda marks_full.json.
+coinciden con el largo de cada frase del guion. Guarda una reconstrucción de
+respaldo sin sobrescribir las marcas exactas creadas junto con la narración.
 """
 import json
 import os
@@ -13,7 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from guion_titanic import GUION  # noqa: E402
 
 WAV = '/mnt/documents/tt/full.wav'
-OUT = '/mnt/documents/tt/marks_full.json'
+OUT = '/mnt/documents/tt/marks_full.reconstruido.json'
 
 
 def silencios(wav, umbral='-38dB', minimo=0.30):
