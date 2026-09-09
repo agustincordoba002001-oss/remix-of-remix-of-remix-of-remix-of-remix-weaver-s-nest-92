@@ -18,6 +18,11 @@ AUDIO = '/mnt/documents/tt/full.wav'
 MARKS = json.load(open('/mnt/documents/tt/marks_full.json'))
 DUR = MARKS[-1]['t1'] + 2.0
 
+# La voz necesita empezar antes que el cambio visual. Si dibujo e inicio de frase
+# ocurren en el mismo fotograma, el espectador reconoce la escena antes de oír
+# las palabras que la explican y el montaje se percibe adelantado.
+VISUAL_DELAY = 0.85
+
 START = float(os.environ.get('START', 0))
 END = min(float(os.environ.get('END', DUR)), DUR)
 OUT = os.environ.get('OUT', '/mnt/documents/titanic_completo.mp4')
@@ -100,10 +105,16 @@ def build_screens():
     screens = []
     for i, s in enumerate(GUION):
         m = MARKS[i]
-        # La escena empieza exactamente cuando empieza el relato y termina
-        # cuando empieza el siguiente, para que cada dibujo acompañe a su frase.
-        t0 = m['t0']
-        end = MARKS[i + 1]['t0'] if i + 1 < len(MARKS) else DUR
+        # La primera escena ya puede estar en pantalla durante el silencio
+        # inicial. Las siguientes cambian después de oír el comienzo de su frase;
+        # hasta entonces se conserva completa la imagen anterior.
+        scene_t0 = 0.0 if i == 0 else min(m['t0'] + VISUAL_DELAY, m['t1'] - 0.15)
+        reveal_t0 = m['t0'] + (0.18 if i == 0 else VISUAL_DELAY)
+        if i + 1 < len(MARKS):
+            next_mark = MARKS[i + 1]
+            end = min(next_mark['t0'] + VISUAL_DELAY, next_mark['t1'] - 0.15)
+        else:
+            end = DUR
         els = []
         k = clave(i)
         if k:
@@ -131,12 +142,12 @@ def build_screens():
         # El dibujo y los títulos se revelan en la primera mitad de la escena,
         # así el espectador ve la imagen completa mientras sigue el relato.
         per = max(0.45, min(hablado * 0.55 / max(1, len(els)), 2.2))
-        cur = t0
+        cur = reveal_t0
         for el in els:
             el['t0'] = cur
             el['t1'] = cur + per
             cur += per * 0.82
-        screens.append(dict(t0=t0, t1=end, els=els))
+        screens.append(dict(t0=scene_t0, t1=end, els=els))
     return screens
 
 
