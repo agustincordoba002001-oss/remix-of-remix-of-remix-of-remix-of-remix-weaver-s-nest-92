@@ -85,6 +85,7 @@ export function Editor() {
   const pedirFrases = useServerFn(cargarFrases);
   const pedirGuiones = useServerFn(listarGuiones);
   const pedirGuardar = useServerFn(guardarCorrecciones);
+  const pedirTexto = useServerFn(transcribirPedazo);
 
   useEffect(() => {
     void (async () => {
