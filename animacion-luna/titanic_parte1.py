@@ -150,7 +150,7 @@ ESCENAS = [
        ["ESA SEPARACION"], ["DECIDIRIA", "QUIEN VIVIA"], "t043",
        "a locked metal gate in a ship corridor with people behind it"),
     _e("El barco tenía dieciséis compartimientos estancos que se podían cerrar con un solo interruptor del puente.",
-       ["16", "COMPARTIMIENTOS"], ["CIERRE", "AUTOMATICO"], "t044",
+       ["16", "SECCIONES"], ["CIERRE", "AUTOMATICO"], "t044",
        "a diagram of a ship divided into watertight compartments"),
     _e("Podía flotar con cuatro de esos compartimientos inundados. Cuatro. Ese número es clave, recordalo.",
        ["FLOTABA CON"], ["CUATRO", "INUNDADOS"], "t045",

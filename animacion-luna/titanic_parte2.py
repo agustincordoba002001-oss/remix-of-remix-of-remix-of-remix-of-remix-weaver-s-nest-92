@@ -197,7 +197,7 @@ ESCENAS = [
        ["UN METRO", "CUADRADO"], ["HUNDIO AL", "TITANIC"], "t122",
        "a small square outline drawn over a giant ship hull"),
     _e("Pero estaban repartidas a lo largo de cinco compartimientos. Cinco. Y el barco aguantaba cuatro.",
-       ["CINCO", "COMPARTIMIENTOS"], ["AGUANTABA", "CUATRO"], "t123",
+       ["CINCO", "SECCIONES"], ["AGUANTABA", "CUATRO"], "t123",
        "a ship diagram with five front compartments shaded"),
     _e("Ándrius bajó a mirar, hizo la cuenta y volvió al puente con la peor noticia posible.",
        ["ANDREWS"], ["HACE LA", "CUENTA"], "t124",
