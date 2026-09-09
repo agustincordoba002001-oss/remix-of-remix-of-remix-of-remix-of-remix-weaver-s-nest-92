@@ -250,6 +250,7 @@ export function Editor() {
               src={video}
               controls
               playsInline
+              onLoadedMetadata={reconocerVideo}
               onTimeUpdate={seguirTiempo}
               onSeeked={seguirTiempo}
               onPause={seguirTiempo}
@@ -257,9 +258,19 @@ export function Editor() {
             />
           ) : (
             <p className="mt-3 text-sm text-muted-foreground">
-              Elegí el video terminado; queda solo en tu navegador.
+              Elegí el video terminado; queda solo en tu navegador y la lista de abajo se arma con
+              la narración de ese mismo video.
             </p>
           )}
+
+          <Button
+            variant="secondary"
+            className="mt-4 h-11"
+            disabled={!frases.length || !video}
+            onClick={irAlMomento}
+          >
+            Ir a la frase de este momento
+          </Button>
 
           {guiones.length > 0 && (
             <label className="mt-5 block text-sm text-muted-foreground">
@@ -269,9 +280,10 @@ export function Editor() {
                 onChange={(e) => void abrir(e.target.value)}
                 className="mt-2 w-full rounded-md border border-border/70 bg-background/60 p-2 text-sm"
               >
+                <option value="">— la del video que subí —</option>
                 {guiones.map((g) => (
                   <option key={g.id} value={g.id}>
-                    {g.nombre}
+                    {g.nombre} · {reloj(g.duracion)}
                   </option>
                 ))}
               </select>
@@ -280,8 +292,9 @@ export function Editor() {
 
           <label className="mt-4 flex items-center gap-2 text-sm">
             <input type="checkbox" checked={seguir} onChange={(e) => setSeguir(e.target.checked)} />
-            Que la lista siga sola al video
+            Que la lista siga sola al video (si no, se queda quieta)
           </label>
+
 
           {expresion && (
             <p className="mt-4 text-xs text-muted-foreground">
