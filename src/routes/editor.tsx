@@ -102,24 +102,59 @@ export function Editor() {
     }
   }
 
-  /** Al cargar el video, busca la narración que dura lo mismo: la de ESE video. */
-  function reconocerVideo() {
-    const dur = videoRef.current?.duration ?? 0;
-    if (!dur || !guiones.length) return;
-    const mejor = guiones
-      .map((g) => ({ g, dif: Math.abs(g.duracion - dur) }))
-      .sort((a, b) => a.dif - b.dif)[0];
-    if (mejor && mejor.dif <= 4) {
-      toast.success(`Leí el video: ${mejor.g.frases} frases de esta narración`);
-      void abrir(mejor.g.id, true);
-    } else {
-      setFrases([]);
-      setGuion("");
-      toast.error(
-        "Este video no coincide con ninguna narración guardada. Elegila abajo a mano si querés.",
+  /**
+   * Lee el archivo que subió: encuentra frase por frase dónde habla la voz y,
+   * si es una narración del proyecto, le pone el texto de cada frase.
+   */
+  async function leerVideo() {
+    const f = archivo;
+    if (!f) {
+      toast.error("Primero subí el video");
+      return;
+    }
+    setLeyendo(true);
+    setPaso(0);
+    try {
+      const { duracion, tramos } = await leerTramos(f, setPaso);
+      if (!tramos.length) {
+        toast.error("No escuché voz en este video");
+        return;
+      }
+      const mejor = guiones
+        .map((g) => ({ g, dif: Math.abs(g.duracion - duracion) }))
+        .sort((a, b) => a.dif - b.dif)[0];
+
+      let textos: string[] = [];
+      if (mejor && mejor.dif <= 60) {
+        const r = await pedirFrases({ data: { id: mejor.g.id } });
+        textos = r.map((x) => x.txt);
+        setGuion(mejor.g.id);
+      } else {
+        setGuion("");
+      }
+
+      const nuevas: Frase[] = tramos.map((t, i) => ({
+        t0: t.t0,
+        t1: t.t1,
+        txt: textos[i] ?? "",
+      }));
+      setFrases(nuevas);
+      setOriginal(nuevas.map((x) => x.txt));
+      setPruebas({});
+      setAjustes({});
+      setActual(0);
+      toast.success(
+        textos.length
+          ? `Leí el video: ${nuevas.length} frases con su texto, listas para editar`
+          : `Leí el video: ${nuevas.length} frases marcadas; escribí el texto de las que quieras cambiar`,
       );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No pude leer el audio del video");
+    } finally {
+      setLeyendo(false);
     }
   }
+
 
   /** Mientras el video corre, marca la frase de ese segundo (sin mover la lista). */
   const seguirTiempo = useCallback(() => {
