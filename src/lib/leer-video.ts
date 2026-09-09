@@ -14,11 +14,7 @@ export async function leerTramos(
 ): Promise<{ duracion: number; tramos: Tramo[]; sonido: Sonido }> {
   const buf = await archivo.arrayBuffer();
   avisar?.(0.35);
-  const Ctx: typeof AudioContext =
-    (window as unknown as { AudioContext: typeof AudioContext }).AudioContext ??
-    (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-  const ctx = new Ctx();
-  const audio = await ctx.decodeAudioData(buf);
+  const audio = await decodificar(buf);
   avisar?.(0.7);
 
   const data = audio.getChannelData(0);
@@ -31,7 +27,6 @@ export async function leerTramos(
     energias.push(Math.sqrt(s / paso));
   }
   const sonido = aMono16k(data, sr);
-  void ctx.close();
   avisar?.(0.85);
 
   const orden = [...energias].sort((a, b) => a - b);
@@ -65,6 +60,41 @@ export async function leerTramos(
 
   avisar?.(1);
   return { duracion: audio.duration, tramos, sonido };
+}
+
+/**
+ * Abre el sonido del archivo. Primero prueba en calidad chica (16.000 por
+ * segundo, en un solo canal): así un video largo entra sin quedarse sin memoria.
+ * Si el navegador no puede, prueba de la forma normal.
+ */
+async function decodificar(buf: ArrayBuffer): Promise<AudioBuffer> {
+  const Offline: typeof OfflineAudioContext | undefined =
+    (window as unknown as { OfflineAudioContext?: typeof OfflineAudioContext })
+      .OfflineAudioContext ??
+    (window as unknown as { webkitOfflineAudioContext?: typeof OfflineAudioContext })
+      .webkitOfflineAudioContext;
+  if (Offline) {
+    try {
+      const off = new Offline(1, 16000, 16000);
+      return await off.decodeAudioData(buf.slice(0));
+    } catch {
+      /* probamos de la forma normal */
+    }
+  }
+  const Ctx: typeof AudioContext | undefined =
+    (window as unknown as { AudioContext?: typeof AudioContext }).AudioContext ??
+    (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!Ctx) throw new Error("Este navegador no puede abrir el sonido del video");
+  const ctx = new Ctx();
+  try {
+    return await ctx.decodeAudioData(buf.slice(0));
+  } catch {
+    throw new Error(
+      "No pude abrir el sonido de este archivo. Probá con un MP4 o MP3 del mismo video.",
+    );
+  } finally {
+    void ctx.close();
+  }
 }
 
 /** Achica el sonido a 16.000 muestras por segundo, que es lo que hace falta. */
