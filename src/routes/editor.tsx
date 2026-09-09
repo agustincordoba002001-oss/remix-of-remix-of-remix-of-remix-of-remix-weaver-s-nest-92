@@ -78,7 +78,9 @@ function Editor() {
       try {
         const r = await pedirGuiones({});
         setGuiones(r);
-        if (r[0]) void abrir(r[0].id);
+        // Preferimos la narración de ritmo natural, la del video terminado.
+        const elegido = r.find((g) => g.id.endsWith("_natural")) ?? r[0];
+        if (elegido) void abrir(elegido.id);
       } catch {
         /* todavía no hay guiones guardados */
       }
