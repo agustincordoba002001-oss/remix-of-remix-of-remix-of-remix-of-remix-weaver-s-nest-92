@@ -10,33 +10,69 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as EstudioRouteImport } from './routes/estudio'
+import { Route as ApiPublicReferenciasRouteImport } from './routes/api/public/referencias'
+import { Route as ApiPublicReferenciasIdRouteImport } from './routes/api/public/referencias.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const EstudioRoute = EstudioRouteImport.update({
+  id: '/estudio',
+  path: '/estudio',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicReferenciasRoute = ApiPublicReferenciasRouteImport.update({
+  id: '/api/public/referencias',
+  path: '/api/public/referencias',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicReferenciasIdRoute = ApiPublicReferenciasIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => ApiPublicReferenciasRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/estudio': typeof EstudioRoute
+  '/api/public/referencias': typeof ApiPublicReferenciasRouteWithChildren
+  '/api/public/referencias/$id': typeof ApiPublicReferenciasIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/estudio': typeof EstudioRoute
+  '/api/public/referencias': typeof ApiPublicReferenciasRouteWithChildren
+  '/api/public/referencias/$id': typeof ApiPublicReferenciasIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/estudio': typeof EstudioRoute
+  '/api/public/referencias': typeof ApiPublicReferenciasRouteWithChildren
+  '/api/public/referencias/$id': typeof ApiPublicReferenciasIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    '/' | '/estudio' | '/api/public/referencias' | '/api/public/referencias/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    '/' | '/estudio' | '/api/public/referencias' | '/api/public/referencias/$id'
+  id:
+    | '__root__'
+    | '/'
+    | '/estudio'
+    | '/api/public/referencias'
+    | '/api/public/referencias/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  EstudioRoute: typeof EstudioRoute
+  ApiPublicReferenciasRoute: typeof ApiPublicReferenciasRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +84,45 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/estudio': {
+      id: '/estudio'
+      path: '/estudio'
+      fullPath: '/estudio'
+      preLoaderRoute: typeof EstudioRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/referencias': {
+      id: '/api/public/referencias'
+      path: '/api/public/referencias'
+      fullPath: '/api/public/referencias'
+      preLoaderRoute: typeof ApiPublicReferenciasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/referencias/$id': {
+      id: '/api/public/referencias/$id'
+      path: '/$id'
+      fullPath: '/api/public/referencias/$id'
+      preLoaderRoute: typeof ApiPublicReferenciasIdRouteImport
+      parentRoute: typeof ApiPublicReferenciasRoute
+    }
   }
 }
 
+interface ApiPublicReferenciasRouteChildren {
+  ApiPublicReferenciasIdRoute: typeof ApiPublicReferenciasIdRoute
+}
+
+const ApiPublicReferenciasRouteChildren: ApiPublicReferenciasRouteChildren = {
+  ApiPublicReferenciasIdRoute: ApiPublicReferenciasIdRoute,
+}
+
+const ApiPublicReferenciasRouteWithChildren =
+  ApiPublicReferenciasRoute._addFileChildren(ApiPublicReferenciasRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  EstudioRoute: EstudioRoute,
+  ApiPublicReferenciasRoute: ApiPublicReferenciasRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
