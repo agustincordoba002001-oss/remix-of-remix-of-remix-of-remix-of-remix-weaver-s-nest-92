@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as EditorRouteImport } from './routes/editor'
 import { Route as EstudioRouteImport } from './routes/estudio'
 import { Route as ApiPublicReferenciasRouteImport } from './routes/api/public/referencias'
 import { Route as ApiPublicReferenciasIdRouteImport } from './routes/api/public/referencias.$id'
@@ -17,6 +18,11 @@ import { Route as ApiPublicReferenciasIdRouteImport } from './routes/api/public/
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EditorRoute = EditorRouteImport.update({
+  id: '/editor',
+  path: '/editor',
   getParentRoute: () => rootRouteImport,
 } as any)
 const EstudioRoute = EstudioRouteImport.update({
@@ -37,12 +43,14 @@ const ApiPublicReferenciasIdRoute = ApiPublicReferenciasIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/editor': typeof EditorRoute
   '/estudio': typeof EstudioRoute
   '/api/public/referencias': typeof ApiPublicReferenciasRouteWithChildren
   '/api/public/referencias/$id': typeof ApiPublicReferenciasIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/editor': typeof EditorRoute
   '/estudio': typeof EstudioRoute
   '/api/public/referencias': typeof ApiPublicReferenciasRouteWithChildren
   '/api/public/referencias/$id': typeof ApiPublicReferenciasIdRoute
@@ -50,6 +58,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/editor': typeof EditorRoute
   '/estudio': typeof EstudioRoute
   '/api/public/referencias': typeof ApiPublicReferenciasRouteWithChildren
   '/api/public/referencias/$id': typeof ApiPublicReferenciasIdRoute
@@ -57,13 +66,22 @@ export interface FileRoutesById {
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/estudio' | '/api/public/referencias' | '/api/public/referencias/$id'
+    | '/'
+    | '/editor'
+    | '/estudio'
+    | '/api/public/referencias'
+    | '/api/public/referencias/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
-    '/' | '/estudio' | '/api/public/referencias' | '/api/public/referencias/$id'
+    | '/'
+    | '/editor'
+    | '/estudio'
+    | '/api/public/referencias'
+    | '/api/public/referencias/$id'
   id:
     | '__root__'
     | '/'
+    | '/editor'
     | '/estudio'
     | '/api/public/referencias'
     | '/api/public/referencias/$id'
@@ -71,6 +89,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  EditorRoute: typeof EditorRoute
   EstudioRoute: typeof EstudioRoute
   ApiPublicReferenciasRoute: typeof ApiPublicReferenciasRouteWithChildren
 }
@@ -82,6 +101,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/editor': {
+      id: '/editor'
+      path: '/editor'
+      fullPath: '/editor'
+      preLoaderRoute: typeof EditorRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/estudio': {
@@ -121,6 +147,7 @@ const ApiPublicReferenciasRouteWithChildren =
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  EditorRoute: EditorRoute,
   EstudioRoute: EstudioRoute,
   ApiPublicReferenciasRoute: ApiPublicReferenciasRouteWithChildren,
 }
