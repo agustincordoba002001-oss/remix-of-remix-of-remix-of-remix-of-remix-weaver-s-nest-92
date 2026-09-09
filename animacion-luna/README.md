@@ -64,3 +64,21 @@ Los dibujos nuevos de cada tema se generan como PNG transparentes de al menos 10
 Papel blanco cálido con líneas de fondo, ilustraciones editoriales con recuadro implícito,
 revelado en trazo de tinta y luego transición al color, títulos que cambian de color al
 terminar de escribirse. Renderizador: `build_alunizaje_horizontal.py`. Assets: `assets/`.
+
+---
+
+## messi100 (nombre oficial del estilo)
+
+"messi100" es el nombre que usa el usuario para el estilo definitivo, el mismo del
+video de prueba del Titanic. Es exactamente el Volumen 1 descrito arriba:
+
+- Hoja blanca lisa, sin textura ni líneas.
+- Ilustración editorial dibujada a tinta fina con color de acuarela, con detalle
+  histórico correcto y poses expresivas; nunca fotos ni 3D ni iconos planos.
+- Cada dibujo recortado sobre blanco (PNG transparente), sin escenografía, sin
+  marco y sin letras.
+- La mano dibuja fila por fila y ya en color definitivo.
+- Títulos fijos en rojo, azul, dorado y negro (DejaVu Sans Condensed bold).
+- Un dibujo propio por escena, nunca repetido.
+- Los dibujos se piden con `imagenes_titanic.py` (generador de la plataforma,
+  modelo google/gemini-3.1-flash-image), que ya trae el estilo messi100 escrito.
