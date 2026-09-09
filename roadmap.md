@@ -38,3 +38,10 @@
 - [x] Botón para animar el guion aprobado (motor propio en el navegador, gratis)
 - [x] Narrador v2: sin ideas repetidas, cronología con contexto y conectores sin repetir
 - [x] Panel "Enseñarle a mejorar": el usuario escribe una indicación y el narrador la aplica siempre
+
+## Editor de voz sobre el video (listo)
+- [x] Subir el video y editarlo en la página /editor
+- [x] Lista frase por frase que sigue al video y marca la frase del minuto exacto
+- [x] Audio de prueba por frase, aprobar y guardar correcciones
+- [x] Grabar mi propia voz para que la narración imite mi forma de decirlo
+- [x] Estilos fijos del proyecto: dibujo messi100 y narración Lolosi10
