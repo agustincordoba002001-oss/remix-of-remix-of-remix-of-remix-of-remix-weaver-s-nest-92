@@ -14,11 +14,7 @@ export async function leerTramos(
 ): Promise<{ duracion: number; tramos: Tramo[]; sonido: Sonido }> {
   const buf = await archivo.arrayBuffer();
   avisar?.(0.35);
-  const Ctx: typeof AudioContext =
-    (window as unknown as { AudioContext: typeof AudioContext }).AudioContext ??
-    (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-  const ctx = new Ctx();
-  const audio = await ctx.decodeAudioData(buf);
+  const audio = await decodificar(buf);
   avisar?.(0.7);
 
   const data = audio.getChannelData(0);
