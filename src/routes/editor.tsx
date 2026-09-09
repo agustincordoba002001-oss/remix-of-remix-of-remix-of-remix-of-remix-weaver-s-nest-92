@@ -278,7 +278,11 @@ export function Editor() {
             className="hidden"
             onChange={(e) => {
               const f = e.target.files?.[0];
-              if (f) setVideo(URL.createObjectURL(f));
+              if (f) {
+                setArchivo(f);
+                setVideo(URL.createObjectURL(f));
+                setFrases([]);
+              }
             }}
           />
           <Button className="mt-3 h-11" onClick={() => archivoRef.current?.click()}>
@@ -291,7 +295,6 @@ export function Editor() {
               src={video}
               controls
               playsInline
-              onLoadedMetadata={reconocerVideo}
               onTimeUpdate={seguirTiempo}
               onSeeked={seguirTiempo}
               onPause={seguirTiempo}
@@ -305,13 +308,29 @@ export function Editor() {
           )}
 
           <Button
+            className="mt-4 h-11 w-full"
+            disabled={!archivo || leyendo}
+            onClick={() => void leerVideo()}
+          >
+            {leyendo ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Check className="mr-2 h-4 w-4" />
+            )}
+            {leyendo
+              ? `Leyendo el video… ${Math.round(paso * 100)}%`
+              : "Leer el video y cargar las frases"}
+          </Button>
+
+          <Button
             variant="secondary"
-            className="mt-4 h-11"
+            className="mt-3 h-11 w-full"
             disabled={!frases.length || !video}
             onClick={irAlMomento}
           >
             Ir a la frase de este momento
           </Button>
+
 
           {guiones.length > 0 && (
             <label className="mt-5 block text-sm text-muted-foreground">
