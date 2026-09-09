@@ -27,7 +27,6 @@ export async function leerTramos(
     energias.push(Math.sqrt(s / paso));
   }
   const sonido = aMono16k(data, sr);
-  void ctx.close();
   avisar?.(0.85);
 
   const orden = [...energias].sort((a, b) => a - b);
