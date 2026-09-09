@@ -22,12 +22,13 @@ CRUDO = '/mnt/documents/ref_tt_crudo'
 os.makedirs(DEST, exist_ok=True)
 os.makedirs(CRUDO, exist_ok=True)
 
-# El estilo de siempre: dibujo a color, trazo negro, fondo blanco liso.
-ESTILO = ('simple colorful cartoon sticker illustration, thick black ink outlines, '
-          'bright flat colors, no shading, isolated single subject cut out on a '
-          'plain solid pure white background, lots of empty white space, '
-          'no scenery, no background details, no border, no frame, '
-          'no text, no words, no letters, no watermark')
+# El estilo de siempre: dibujo a color, trazo negro, recortado sobre hoja blanca.
+ESTILO = ('flat 2d hand drawn cartoon clipart sticker, thick black ink outlines, '
+          'bright flat colors, no shading, no gradients, one single subject '
+          'centered and cut out on a plain pure white empty background, '
+          'no scenery, no landscape, no sky, no sea, no room, no floor, '
+          'no shadow, no border, no frame, no text, no letters, no watermark, '
+          'not a photo, not 3d, not realistic')
 
 # El fondo del dibujo siempre es blanco: se sacan las palabras que oscurecen la escena.
 OSCURAS = (('at night', ''), ('night sky', 'sky'), (' at dusk', ''), ('night', ''),
@@ -43,7 +44,7 @@ def limpiar(prompt):
 
 def descargar(prompt, destino, semilla):
     url = ('https://image.pollinations.ai/prompt/'
-           + urllib.parse.quote(f'{limpiar(prompt)}, {ESTILO}')
+           + urllib.parse.quote(f'{ESTILO}: {limpiar(prompt)}')
            + f'?width=1024&height=1024&nologo=true&seed={semilla}&model=turbo')
     req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
     with urllib.request.urlopen(req, timeout=300) as r:
@@ -55,27 +56,66 @@ def descargar(prompt, destino, semilla):
 
 
 def sin_marco(im):
-    """Saca el borde oscuro que a veces dibuja el modelo alrededor de la escena."""
+    """Saca el marco oscuro que a veces dibuja el modelo alrededor de la escena."""
+    g = im.convert('L')
     w, h = im.size
-    m = max(3, int(min(w, h) * 0.012))
-    return im.crop((m, m, w - m, h - m))
+    px = g.load()
+    lim = max(2, int(min(w, h) * 0.06))
+
+    def oscura(vals):
+        return sum(vals) / len(vals) < 110
+
+    izq = arr = 0
+    while izq < lim and oscura([px[izq, y] for y in range(0, h, 8)]):
+        izq += 1
+    der = w - 1
+    while w - 1 - der < lim and oscura([px[der, y] for y in range(0, h, 8)]):
+        der -= 1
+    while arr < lim and oscura([px[x, arr] for x in range(0, w, 8)]):
+        arr += 1
+    aba = h - 1
+    while h - 1 - aba < lim and oscura([px[x, aba] for x in range(0, w, 8)]):
+        aba -= 1
+    m = max(3, int(min(w, h) * 0.008))
+    return im.crop((min(izq + m, w // 4), min(arr + m, h // 4),
+                    max(der - m, w * 3 // 4), max(aba - m, h * 3 // 4)))
+
+
+def recortar_fondo(im):
+    """Vuelve transparente el fondo claro y uniforme que rodea al dibujo."""
+    im = im.convert('RGBA')
+    w, h = im.size
+    px = im.load()
+    borde = [px[x, y][:3] for x in range(0, w, 16) for y in (0, h - 1)]
+    borde += [px[x, y][:3] for y in range(0, h, 16) for x in (0, w - 1)]
+    claro = sum(1 for c in borde if min(c) > 205) / len(borde)
+    if claro < 0.7:
+        return im, False
+    datos = im.getdata()
+    nuevo = [(r, g, b, 0) if (min(r, g, b) > 218) else (r, g, b, a)
+             for r, g, b, a in datos]
+    im.putdata(nuevo)
+    bb = im.getbbox()
+    return (im.crop(bb) if bb else im), True
 
 
 def a_dibujo(origen, destino):
-    """Deja el dibujo a color, sin marco y con esquinas suaves."""
+    """Deja el dibujo a color: recortado sobre blanco cuando se puede."""
     im = sin_marco(Image.open(origen).convert('RGB'))
     im = ImageOps.autocontrast(im, cutoff=1)
-    im = ImageEnhance.Color(im).enhance(1.3)
+    im = ImageEnhance.Color(im).enhance(1.25)
     im = ImageEnhance.Contrast(im).enhance(1.08)
-    im.thumbnail((900, 900), Image.Resampling.LANCZOS)
-    out = im.convert('RGBA')
-    # Esquinas redondeadas para que quede como una lámina pegada en la hoja.
-    r = int(min(out.size) * 0.05)
-    mask = Image.new('L', out.size, 0)
-    ImageDraw.Draw(mask).rounded_rectangle((0, 0, out.width - 1, out.height - 1),
-                                           radius=r, fill=255)
-    out.putalpha(mask)
+    out, recortado = recortar_fondo(im)
+    out.thumbnail((900, 900), Image.Resampling.LANCZOS)
+    if not recortado:
+        # Si el modelo dibujó un fondo entero, queda como lámina de esquinas suaves.
+        r = int(min(out.size) * 0.05)
+        mask = Image.new('L', out.size, 0)
+        ImageDraw.Draw(mask).rounded_rectangle((0, 0, out.width - 1, out.height - 1),
+                                               radius=r, fill=255)
+        out.putalpha(mask)
     out.save(destino)
+
 
 
 def una(s):
