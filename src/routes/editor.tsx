@@ -47,7 +47,7 @@ type Frase = { t0: number; t1: number; txt: string };
 const reloj = (s: number) =>
   `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, "0")}`;
 
-function Editor() {
+export function Editor() {
   const [video, setVideo] = useState<string | null>(null);
   const [guiones, setGuiones] = useState<{ id: string; nombre: string }[]>([]);
   const [guion, setGuion] = useState("");
