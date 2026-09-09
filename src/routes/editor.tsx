@@ -19,6 +19,8 @@ import {
   type AjusteVoz,
   type Expresion,
 } from "@/lib/voz-imitada";
+import { leerTramos } from "@/lib/leer-video";
+
 
 export const Route = createFileRoute("/editor")({
   head: () => ({
@@ -49,6 +51,10 @@ const reloj = (s: number) =>
 
 export function Editor() {
   const [video, setVideo] = useState<string | null>(null);
+  const [archivo, setArchivo] = useState<File | null>(null);
+  const [leyendo, setLeyendo] = useState(false);
+  const [paso, setPaso] = useState(0);
+
   const [guiones, setGuiones] = useState<
     { id: string; nombre: string; frases: number; duracion: number }[]
   >([]);
@@ -100,24 +106,59 @@ export function Editor() {
     }
   }
 
-  /** Al cargar el video, busca la narración que dura lo mismo: la de ESE video. */
-  function reconocerVideo() {
-    const dur = videoRef.current?.duration ?? 0;
-    if (!dur || !guiones.length) return;
-    const mejor = guiones
-      .map((g) => ({ g, dif: Math.abs(g.duracion - dur) }))
-      .sort((a, b) => a.dif - b.dif)[0];
-    if (mejor && mejor.dif <= 4) {
-      toast.success(`Leí el video: ${mejor.g.frases} frases de esta narración`);
-      void abrir(mejor.g.id, true);
-    } else {
-      setFrases([]);
-      setGuion("");
-      toast.error(
-        "Este video no coincide con ninguna narración guardada. Elegila abajo a mano si querés.",
+  /**
+   * Lee el archivo que subió: encuentra frase por frase dónde habla la voz y,
+   * si es una narración del proyecto, le pone el texto de cada frase.
+   */
+  async function leerVideo() {
+    const f = archivo;
+    if (!f) {
+      toast.error("Primero subí el video");
+      return;
+    }
+    setLeyendo(true);
+    setPaso(0);
+    try {
+      const { duracion, tramos } = await leerTramos(f, setPaso);
+      if (!tramos.length) {
+        toast.error("No escuché voz en este video");
+        return;
+      }
+      const mejor = guiones
+        .map((g) => ({ g, dif: Math.abs(g.duracion - duracion) }))
+        .sort((a, b) => a.dif - b.dif)[0];
+
+      let textos: string[] = [];
+      if (mejor && mejor.dif <= 60) {
+        const r = await pedirFrases({ data: { id: mejor.g.id } });
+        textos = r.map((x) => x.txt);
+        setGuion(mejor.g.id);
+      } else {
+        setGuion("");
+      }
+
+      const nuevas: Frase[] = tramos.map((t, i) => ({
+        t0: t.t0,
+        t1: t.t1,
+        txt: textos[i] ?? "",
+      }));
+      setFrases(nuevas);
+      setOriginal(nuevas.map((x) => x.txt));
+      setPruebas({});
+      setAjustes({});
+      setActual(0);
+      toast.success(
+        textos.length
+          ? `Leí el video: ${nuevas.length} frases con su texto, listas para editar`
+          : `Leí el video: ${nuevas.length} frases marcadas; escribí el texto de las que quieras cambiar`,
       );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No pude leer el audio del video");
+    } finally {
+      setLeyendo(false);
     }
   }
+
 
   /** Mientras el video corre, marca la frase de ese segundo (sin mover la lista). */
   const seguirTiempo = useCallback(() => {
@@ -237,7 +278,11 @@ export function Editor() {
             className="hidden"
             onChange={(e) => {
               const f = e.target.files?.[0];
-              if (f) setVideo(URL.createObjectURL(f));
+              if (f) {
+                setArchivo(f);
+                setVideo(URL.createObjectURL(f));
+                setFrases([]);
+              }
             }}
           />
           <Button className="mt-3 h-11" onClick={() => archivoRef.current?.click()}>
@@ -250,7 +295,6 @@ export function Editor() {
               src={video}
               controls
               playsInline
-              onLoadedMetadata={reconocerVideo}
               onTimeUpdate={seguirTiempo}
               onSeeked={seguirTiempo}
               onPause={seguirTiempo}
@@ -264,13 +308,29 @@ export function Editor() {
           )}
 
           <Button
+            className="mt-4 h-11 w-full"
+            disabled={!archivo || leyendo}
+            onClick={() => void leerVideo()}
+          >
+            {leyendo ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Check className="mr-2 h-4 w-4" />
+            )}
+            {leyendo
+              ? `Leyendo el video… ${Math.round(paso * 100)}%`
+              : "Leer el video y cargar las frases"}
+          </Button>
+
+          <Button
             variant="secondary"
-            className="mt-4 h-11"
+            className="mt-3 h-11 w-full"
             disabled={!frases.length || !video}
             onClick={irAlMomento}
           >
             Ir a la frase de este momento
           </Button>
+
 
           {guiones.length > 0 && (
             <label className="mt-5 block text-sm text-muted-foreground">
