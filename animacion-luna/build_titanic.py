@@ -14,18 +14,19 @@ import sys
 from PIL import Image, ImageChops, ImageDraw, ImageFont
 
 W, H, FPS = 1280, 720, 30
-AUDIO = '/mnt/documents/tt/full.wav'
-MARKS = json.load(open('/mnt/documents/tt/marks_full.json'))
+AUDIO = os.environ.get('AUDIO', '/mnt/documents/tt_natural/full.wav')
+MARKS_PATH = os.environ.get('MARKS', '/mnt/documents/tt_natural/marks_full.json')
+MARKS = json.load(open(MARKS_PATH))
 DUR = MARKS[-1]['t1'] + 2.0
 
 # La voz necesita empezar antes que el cambio visual. Si dibujo e inicio de frase
 # ocurren en el mismo fotograma, el espectador reconoce la escena antes de oír
 # las palabras que la explican y el montaje se percibe adelantado.
-VISUAL_DELAY = 0.85
+VISUAL_DELAY = 0.35
 
 START = float(os.environ.get('START', 0))
 END = min(float(os.environ.get('END', DUR)), DUR)
-OUT = os.environ.get('OUT', '/mnt/documents/titanic_completo.mp4')
+OUT = os.environ.get('OUT', '/mnt/documents/titanic_perfeccionado_v3.mp4')
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from guion_titanic import GUION  # noqa: E402
@@ -109,9 +110,8 @@ def build_screens():
     screens = []
     for i, s in enumerate(GUION):
         m = MARKS[i]
-        # La primera escena ya puede estar en pantalla durante el silencio
-        # inicial. Las siguientes cambian después de oír el comienzo de su frase;
-        # hasta entonces se conserva completa la imagen anterior.
+        # Se oye primero el inicio de la idea y recién entonces entra su imagen.
+        # La imagen anterior permanece completa durante ese breve enlace.
         scene_t0 = 0.0 if i == 0 else min(m['t0'] + VISUAL_DELAY, m['t1'] - 0.15)
         reveal_t0 = m['t0'] + (0.18 if i == 0 else VISUAL_DELAY)
         if i + 1 < len(MARKS):
@@ -142,13 +142,13 @@ def build_screens():
             els.append(dict(im=la, x=zona_x + (zona_w - la.width) // 2, y=y,
                             rows=len(lines)))
             y += la.height + 34
-        # Repartir el trazado a lo largo de casi toda la frase. Antes se imponía
-        # un máximo de 2,2 s y el dibujo quedaba terminado cuando la voz todavía
-        # estaba desarrollando la idea, que se percibía como otro adelanto.
+        # El trazado ocupa aproximadamente dos tercios de la frase. El tercio
+        # final queda quieto para poder mirar el resultado antes del próximo
+        # cambio; la nueva narración evita intervalos imposiblemente cortos.
         disponible = max(0.25, m['t1'] - reveal_t0)
         solape = 0.88
         recorrido = 1 + solape * max(0, len(els) - 1)
-        per = max(0.20, disponible * 0.90 / recorrido)
+        per = max(0.35, disponible * 0.64 / recorrido)
         cur = reveal_t0
         for el in els:
             el['t0'] = cur

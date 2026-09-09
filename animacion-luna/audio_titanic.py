@@ -1,9 +1,11 @@
 """Narración completa de EL TITANIC — voz Dark, sin música de fondo.
 
-Genera /mnt/documents/tt/full.wav y /mnt/documents/tt/marks_full.json.
+Genera una narración natural, frase por frase, sin reutilizar el audio antiguo
+que comprimía algunas líneas largas en menos de un segundo.
 Cada frase se sintetiza y masteriza una sola vez: si el proceso se corta,
 al volver a ejecutarlo continúa donde quedó.
 """
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 import os
 import re
@@ -18,8 +20,8 @@ from mastering import masterizar  # noqa: E402
 from guion_titanic import GUION  # noqa: E402
 
 SR = 48000
-TMP = '/mnt/documents/tt'
-SEG = '/mnt/documents/voces_tt'
+TMP = os.environ.get('TITANIC_AUDIO_DIR', '/mnt/documents/tt_natural')
+SEG = os.environ.get('TITANIC_VOICE_DIR', '/mnt/documents/voces_tt_natural')
 os.makedirs(TMP, exist_ok=True)
 os.makedirs(SEG, exist_ok=True)
 
@@ -52,18 +54,18 @@ AGILES = ('porque', 'entonces', 'después', 'y todo', 'además', 'mientras')
 
 
 def ritmo(txt):
-    """Ritmo frase a frase: más lento en lo dramático, más ágil en lo narrativo."""
+    """Ritmo claro y conversacional, con aire extra en frases dramáticas."""
     t = txt.lower()
-    v = 1.0
+    v = 1.10
     if any(k in t for k in DRAMATICAS):
-        v += 0.055
+        v += 0.06
     if any(t.startswith(k) for k in AGILES):
-        v -= 0.03
+        v -= 0.015
     if len(txt) > 140:
-        v -= 0.02
+        v += 0.02
     if re.search(r'\d', t):
-        v -= 0.03
-    return round(min(1.08, max(0.95, v)), 3)
+        v += 0.015
+    return round(min(1.20, max(1.08, v)), 3)
 
 
 def nivelar(a, objetivo=0.079, techo=0.68):
@@ -74,34 +76,51 @@ def nivelar(a, objetivo=0.079, techo=0.68):
     return a * min(g, techo / pico)
 
 
-def main():
-    parts = [np.zeros(int(0.4 * SR), np.float32)]
-    marks = []
-    tcur = 0.4
-    for i, s in enumerate(GUION):
-        txt, gap = s['txt'], s['gap']
-        ajustes = {
+def preparar_frase(item):
+    i, s = item
+    txt = s['txt']
+    raw = f'{SEG}/f_{i:03d}.wav'
+    dst = f'{SEG}/f_{i:03d}_master.wav'
+    if not os.path.exists(raw):
+        sintetizar(txt, 'dark', raw, ajustes={
             'length_scale': ritmo(txt),
             'noise_scale': round(0.48 + (i % 3) * 0.01, 3),
             'noise_w': round(0.60 + (i % 2) * 0.02, 3),
-        }
-        raw = f'{SEG}/f_{i:03d}.wav'
+        })
+    if not os.path.exists(dst):
+        masterizar(raw, dst, 'dark')
+    return i
+
+
+def main():
+    # La síntesis es remota; preparar unas pocas frases en paralelo reduce el
+    # tiempo sin alterar su orden posterior en la narración.
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        futures = [pool.submit(preparar_frase, item) for item in enumerate(GUION)]
+        for hecho, fut in enumerate(as_completed(futures), 1):
+            fut.result()
+            if hecho % 10 == 0:
+                print('voz', hecho, 'de', len(GUION), flush=True)
+
+    parts = [np.zeros(int(0.55 * SR), np.float32)]
+    marks = []
+    tcur = 0.55
+    for i, s in enumerate(GUION):
+        txt, gap = s['txt'], s['gap']
         dst = f'{SEG}/f_{i:03d}_master.wav'
-        if not os.path.exists(raw):
-            sintetizar(txt, 'dark', raw, ajustes=ajustes)
-        if not os.path.exists(dst):
-            masterizar(raw, dst, 'dark')
         a = recortar_silencio(leer_wav(dst))
         a = nivelar(a)
         fade = int(0.05 * SR)
         a[:fade] *= np.linspace(0, 1, fade)
         a[-fade:] *= np.linspace(1, 0, fade)
         marks.append(dict(t0=tcur, t1=tcur + len(a) / SR, txt=txt))
+        # Medio segundo separa con claridad cada idea y deja respirar el dibujo.
+        gap = max(0.52, gap)
         tcur += len(a) / SR + gap
         parts.append(a)
         parts.append(np.zeros(int(gap * SR), np.float32))
-        if i % 10 == 0:
-            print('frase', i, 'de', len(GUION), 'min', round(tcur / 60, 2), flush=True)
+        if i % 25 == 0:
+            print('montaje', i, 'de', len(GUION), 'min', round(tcur / 60, 2), flush=True)
 
     voz = np.concatenate(parts)
     pico = float(np.abs(voz).max())
