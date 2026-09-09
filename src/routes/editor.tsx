@@ -55,7 +55,6 @@ export function Editor() {
   const [archivo, setArchivo] = useState<File | null>(null);
   const [leyendo, setLeyendo] = useState(false);
   const [paso, setPaso] = useState(0);
-  const [sonido, setSonido] = useState<Sonido | null>(null);
   const [transcribiendo, setTranscribiendo] = useState<number | null>(null);
   const [avance, setAvance] = useState(0);
   const cortar = useRef(false);
