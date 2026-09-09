@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, Loader2, Mic, Save, Square, Upload, Volume2 } from "lucide-react";
+import { Check, FileText, Loader2, Mic, Save, Square, Upload, Volume2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
