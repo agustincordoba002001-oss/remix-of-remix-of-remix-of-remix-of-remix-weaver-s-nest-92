@@ -116,16 +116,15 @@ export function Editor() {
    * si es una narración del proyecto, le pone el texto de cada frase.
    */
   async function leerVideo() {
-    const f = archivo;
-    if (!f) {
+    const v = videoRef.current;
+    if (!v) {
       toast.error("Primero subí el video");
       return;
     }
     setLeyendo(true);
     setPaso(0);
     try {
-      const { duracion, tramos, sonido: son } = await leerTramos(f, setPaso);
-      setSonido(son);
+      const { duracion, tramos } = await leerTramos(v, setPaso);
       if (!tramos.length) {
         toast.error("No escuché voz en este video");
         return;
@@ -167,9 +166,10 @@ export function Editor() {
 
   /** Escucha una frase del video y escribe ahí lo que se dice. */
   async function escribirFrase(i: number) {
-    if (!sonido) return;
+    const v = videoRef.current;
+    if (!v) return;
     const f = frases[i]!;
-    const wav = pedazoWavBase64(sonido, Math.max(0, f.t0 - 0.15), f.t1 + 0.15);
+    const wav = await pedazoWavBase64(v, Math.max(0, f.t0 - 0.15), f.t1 + 0.15);
     const r = await pedirTexto({ data: { wav } });
     if (r.texto) {
       setFrases((prev) => {
