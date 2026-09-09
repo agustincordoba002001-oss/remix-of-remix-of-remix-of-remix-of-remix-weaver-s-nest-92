@@ -14,9 +14,9 @@
 - [x] Terminar la animación Volumen 1 del alunizaje hasta el final del guión
 
 ## Video EL TITANIC (corrección final)
-- [ ] Retrasar cada cambio visual hasta después del comienzo de su frase
-- [ ] Verificar muestras del comienzo, mitad, hundimiento y cierre
-- [ ] Renderizar y entregar titan​ic_corregido_v2.mp4
+- [x] Retrasar cada cambio visual hasta después del comienzo de su frase
+- [x] Verificar muestras del comienzo, mitad, hundimiento y cierre
+- [x] Renderizar y entregar titanic_corregido_v2.mp4
 
 ## Video LA GUERRA FRÍA (en curso)
 - [x] Guion: animacion-luna/guion_guerrafria.py (237 escenas, ~23,8 min)
