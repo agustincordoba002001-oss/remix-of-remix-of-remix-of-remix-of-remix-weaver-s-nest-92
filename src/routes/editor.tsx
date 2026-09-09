@@ -403,6 +403,34 @@ export function Editor() {
             Ir a la frase de este momento
           </Button>
 
+          <Button
+            className="mt-3 h-11 w-full"
+            disabled={!sonido || !frases.length || transcribiendo !== null}
+            onClick={() => void transcribirTodo()}
+          >
+            {transcribiendo === -1 ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <FileText className="mr-2 h-4 w-4" />
+            )}
+            {transcribiendo === -1
+              ? `Escribiendo lo que se dice… ${avance}/${frases.length}`
+              : "Escribir lo que dice el video (transcribir)"}
+          </Button>
+
+          {transcribiendo === -1 && (
+            <Button
+              variant="ghost"
+              className="mt-2 h-9 w-full text-sm"
+              onClick={() => {
+                cortar.current = true;
+              }}
+            >
+              Frenar acá
+            </Button>
+          )}
+
+
 
           {guiones.length > 0 && (
             <label className="mt-5 block text-sm text-muted-foreground">
