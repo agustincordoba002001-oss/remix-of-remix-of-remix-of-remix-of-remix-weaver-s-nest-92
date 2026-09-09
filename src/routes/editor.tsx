@@ -49,12 +49,14 @@ const reloj = (s: number) =>
 
 export function Editor() {
   const [video, setVideo] = useState<string | null>(null);
-  const [guiones, setGuiones] = useState<{ id: string; nombre: string }[]>([]);
+  const [guiones, setGuiones] = useState<
+    { id: string; nombre: string; frases: number; duracion: number }[]
+  >([]);
   const [guion, setGuion] = useState("");
   const [frases, setFrases] = useState<Frase[]>([]);
   const [original, setOriginal] = useState<string[]>([]);
   const [actual, setActual] = useState(0);
-  const [seguir, setSeguir] = useState(true);
+  const [seguir, setSeguir] = useState(false);
   const [probando, setProbando] = useState<number | null>(null);
   const [pruebas, setPruebas] = useState<Record<number, string>>({});
   const [ajustes, setAjustes] = useState<Record<number, AjusteVoz>>({});
@@ -76,11 +78,7 @@ export function Editor() {
   useEffect(() => {
     void (async () => {
       try {
-        const r = await pedirGuiones({});
-        setGuiones(r);
-        // Preferimos la narración de ritmo natural, la del video terminado.
-        const elegido = r.find((g) => g.id.endsWith("_natural")) ?? r[0];
-        if (elegido) void abrir(elegido.id);
+        setGuiones(await pedirGuiones({}));
       } catch {
         /* todavía no hay guiones guardados */
       }
@@ -88,7 +86,7 @@ export function Editor() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function abrir(id: string) {
+  async function abrir(id: string, silencioso = false) {
     setGuion(id);
     try {
       const r = await pedirFrases({ data: { id } });
@@ -96,13 +94,32 @@ export function Editor() {
       setOriginal(r.map((f) => f.txt));
       setPruebas({});
       setAjustes({});
-      toast.success(`${r.length} frases listas para editar`);
+      if (!silencioso) toast.success(`${r.length} frases listas para editar`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "No pude abrir ese guion");
     }
   }
 
-  /** Mientras el video corre, marca y trae a la vista la frase de ese segundo. */
+  /** Al cargar el video, busca la narración que dura lo mismo: la de ESE video. */
+  function reconocerVideo() {
+    const dur = videoRef.current?.duration ?? 0;
+    if (!dur || !guiones.length) return;
+    const mejor = guiones
+      .map((g) => ({ g, dif: Math.abs(g.duracion - dur) }))
+      .sort((a, b) => a.dif - b.dif)[0];
+    if (mejor && mejor.dif <= 4) {
+      toast.success(`Leí el video: ${mejor.g.frases} frases de esta narración`);
+      void abrir(mejor.g.id, true);
+    } else {
+      setFrases([]);
+      setGuion("");
+      toast.error(
+        "Este video no coincide con ninguna narración guardada. Elegila abajo a mano si querés.",
+      );
+    }
+  }
+
+  /** Mientras el video corre, marca la frase de ese segundo (sin mover la lista). */
   const seguirTiempo = useCallback(() => {
     const t = videoRef.current?.currentTime ?? 0;
     let i = frases.findIndex((f) => t >= f.t0 && t < f.t1);
@@ -113,10 +130,21 @@ export function Editor() {
     }
   }, [frases, actual, seguir]);
 
+  /** Lleva la lista a la frase del segundo en que quedó el video. */
+  function irAlMomento() {
+    const t = videoRef.current?.currentTime ?? 0;
+    let i = frases.findIndex((f) => t >= f.t0 && t < f.t1);
+    if (i === -1) i = Math.max(0, frases.findIndex((f) => f.t0 > t) - 1);
+    if (i === -1) return;
+    setActual(i);
+    filaRef.current[i]?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }
+
   function irA(i: number) {
     setActual(i);
     if (videoRef.current) videoRef.current.currentTime = frases[i]!.t0;
   }
+
 
   async function probar(i: number, imitar?: AjusteVoz | null) {
     setProbando(i);
@@ -222,6 +250,7 @@ export function Editor() {
               src={video}
               controls
               playsInline
+              onLoadedMetadata={reconocerVideo}
               onTimeUpdate={seguirTiempo}
               onSeeked={seguirTiempo}
               onPause={seguirTiempo}
@@ -229,9 +258,19 @@ export function Editor() {
             />
           ) : (
             <p className="mt-3 text-sm text-muted-foreground">
-              Elegí el video terminado; queda solo en tu navegador.
+              Elegí el video terminado; queda solo en tu navegador y la lista de abajo se arma con
+              la narración de ese mismo video.
             </p>
           )}
+
+          <Button
+            variant="secondary"
+            className="mt-4 h-11"
+            disabled={!frases.length || !video}
+            onClick={irAlMomento}
+          >
+            Ir a la frase de este momento
+          </Button>
 
           {guiones.length > 0 && (
             <label className="mt-5 block text-sm text-muted-foreground">
@@ -241,9 +280,10 @@ export function Editor() {
                 onChange={(e) => void abrir(e.target.value)}
                 className="mt-2 w-full rounded-md border border-border/70 bg-background/60 p-2 text-sm"
               >
+                <option value="">— la del video que subí —</option>
                 {guiones.map((g) => (
                   <option key={g.id} value={g.id}>
-                    {g.nombre}
+                    {g.nombre} · {reloj(g.duracion)}
                   </option>
                 ))}
               </select>
@@ -252,8 +292,9 @@ export function Editor() {
 
           <label className="mt-4 flex items-center gap-2 text-sm">
             <input type="checkbox" checked={seguir} onChange={(e) => setSeguir(e.target.checked)} />
-            Que la lista siga sola al video
+            Que la lista siga sola al video (si no, se queda quieta)
           </label>
+
 
           {expresion && (
             <p className="mt-4 text-xs text-muted-foreground">
