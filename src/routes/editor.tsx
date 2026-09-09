@@ -51,6 +51,10 @@ const reloj = (s: number) =>
 
 export function Editor() {
   const [video, setVideo] = useState<string | null>(null);
+  const [archivo, setArchivo] = useState<File | null>(null);
+  const [leyendo, setLeyendo] = useState(false);
+  const [paso, setPaso] = useState(0);
+
   const [guiones, setGuiones] = useState<
     { id: string; nombre: string; frases: number; duracion: number }[]
   >([]);
