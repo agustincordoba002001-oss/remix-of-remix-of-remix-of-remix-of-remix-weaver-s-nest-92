@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, Loader2, Mic, Save, Square, Upload, Volume2 } from "lucide-react";
+import { Check, FileText, Loader2, Mic, Save, Square, Upload, Volume2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import {
   generarVozFrase,
   guardarCorrecciones,
   listarGuiones,
+  transcribirPedazo,
 } from "@/lib/edicion.functions";
 import {
   ajustesDesdeExpresion,
@@ -19,7 +20,7 @@ import {
   type AjusteVoz,
   type Expresion,
 } from "@/lib/voz-imitada";
-import { leerTramos } from "@/lib/leer-video";
+import { leerTramos, pedazoWavBase64, type Sonido } from "@/lib/leer-video";
 
 
 export const Route = createFileRoute("/editor")({
@@ -54,6 +55,10 @@ export function Editor() {
   const [archivo, setArchivo] = useState<File | null>(null);
   const [leyendo, setLeyendo] = useState(false);
   const [paso, setPaso] = useState(0);
+  const [sonido, setSonido] = useState<Sonido | null>(null);
+  const [transcribiendo, setTranscribiendo] = useState<number | null>(null);
+  const [avance, setAvance] = useState(0);
+  const cortar = useRef(false);
 
   const [guiones, setGuiones] = useState<
     { id: string; nombre: string; frases: number; duracion: number }[]
@@ -80,6 +85,7 @@ export function Editor() {
   const pedirFrases = useServerFn(cargarFrases);
   const pedirGuiones = useServerFn(listarGuiones);
   const pedirGuardar = useServerFn(guardarCorrecciones);
+  const pedirTexto = useServerFn(transcribirPedazo);
 
   useEffect(() => {
     void (async () => {
@@ -119,7 +125,8 @@ export function Editor() {
     setLeyendo(true);
     setPaso(0);
     try {
-      const { duracion, tramos } = await leerTramos(f, setPaso);
+      const { duracion, tramos, sonido: son } = await leerTramos(f, setPaso);
+      setSonido(son);
       if (!tramos.length) {
         toast.error("No escuché voz en este video");
         return;
@@ -159,6 +166,71 @@ export function Editor() {
     }
   }
 
+  /** Escucha una frase del video y escribe ahí lo que se dice. */
+  async function escribirFrase(i: number) {
+    if (!sonido) return;
+    const f = frases[i]!;
+    const wav = pedazoWavBase64(sonido, Math.max(0, f.t0 - 0.15), f.t1 + 0.15);
+    const r = await pedirTexto({ data: { wav } });
+    if (r.texto) {
+      setFrases((prev) => {
+        const next = [...prev];
+        next[i] = { ...next[i]!, txt: r.texto };
+        return next;
+      });
+      setOriginal((prev) => {
+        const next = [...prev];
+        if (!next[i]) next[i] = r.texto;
+        return next;
+      });
+    }
+    return r.texto;
+  }
+
+  /** Escribe una sola frase, a pedido. */
+  async function transcribirUna(i: number) {
+    setTranscribiendo(i);
+    try {
+      const t = await escribirFrase(i);
+      if (!t) toast.info("En esa parte no se escucha voz");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No pude escuchar esa parte");
+    } finally {
+      setTranscribiendo(null);
+    }
+  }
+
+  /** Escribe todo el video, frase por frase, y se puede frenar cuando quieras. */
+  async function transcribirTodo() {
+    if (!sonido || !frases.length) {
+      toast.error("Primero leé el video");
+      return;
+    }
+    cortar.current = false;
+    setTranscribiendo(-1);
+    setAvance(0);
+    try {
+      for (let i = 0; i < frases.length; i++) {
+        if (cortar.current) break;
+        try {
+          await escribirFrase(i);
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : "";
+          if (msg.includes("esperar")) {
+            await new Promise((r) => setTimeout(r, 4000));
+            i--;
+            continue;
+          }
+          toast.error(msg || "No pude seguir escuchando");
+          break;
+        }
+        setAvance(i + 1);
+      }
+      toast.success("Listo: ya podés editar lo que dice cada frase");
+    } finally {
+      setTranscribiendo(null);
+    }
+  }
 
   /** Mientras el video corre, marca la frase de ese segundo (sin mover la lista). */
   const seguirTiempo = useCallback(() => {
@@ -331,6 +403,34 @@ export function Editor() {
             Ir a la frase de este momento
           </Button>
 
+          <Button
+            className="mt-3 h-11 w-full"
+            disabled={!sonido || !frases.length || transcribiendo !== null}
+            onClick={() => void transcribirTodo()}
+          >
+            {transcribiendo === -1 ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <FileText className="mr-2 h-4 w-4" />
+            )}
+            {transcribiendo === -1
+              ? `Escribiendo lo que se dice… ${avance}/${frases.length}`
+              : "Escribir lo que dice el video (transcribir)"}
+          </Button>
+
+          {transcribiendo === -1 && (
+            <Button
+              variant="ghost"
+              className="mt-2 h-9 w-full text-sm"
+              onClick={() => {
+                cortar.current = true;
+              }}
+            >
+              Frenar acá
+            </Button>
+          )}
+
+
 
           {guiones.length > 0 && (
             <label className="mt-5 block text-sm text-muted-foreground">
@@ -416,6 +516,19 @@ export function Editor() {
                     className="mt-2 w-full rounded-md border border-border/60 bg-background/60 p-2 text-sm"
                   />
                   <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      className="h-9 text-sm"
+                      disabled={!sonido || transcribiendo !== null}
+                      onClick={() => void transcribirUna(i)}
+                    >
+                      {transcribiendo === i ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <FileText className="mr-2 h-4 w-4" />
+                      )}
+                      Escribir lo que dice
+                    </Button>
                     <Button
                       variant="ghost"
                       className="h-9 text-sm"

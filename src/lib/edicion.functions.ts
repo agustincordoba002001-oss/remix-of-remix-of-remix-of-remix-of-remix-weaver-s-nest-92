@@ -65,6 +65,37 @@ export const generarVozFrase = createServerFn({ method: "POST" })
     throw new Error(`No se pudo generar la voz: ${ultimo}`);
   });
 
+/** Escucha un pedacito del video y escribe lo que se dice ahí. */
+export const transcribirPedazo = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) =>
+    z.object({ wav: z.string().min(100).max(8_000_000) }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    const key = process.env["LOVABLE_API_KEY"];
+    if (!key) throw new Error("Falta la clave para escuchar el video");
+
+    const bin = Uint8Array.from(atob(data.wav), (c) => c.charCodeAt(0));
+    if (bin.byteLength < 2048) return { texto: "" };
+
+    const form = new FormData();
+    form.append("model", "google/gemini-3.5-transcribe");
+    form.append("file", new Blob([bin], { type: "audio/wav" }), "frase.wav");
+
+    const res = await fetch("https://ai.gateway.lovable.dev/v1/audio/transcriptions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}` },
+      body: form,
+    });
+    if (!res.ok) {
+      const detalle = await res.text().catch(() => "");
+      if (res.status === 402) throw new Error("Se acabaron los créditos para escuchar el video");
+      if (res.status === 429) throw new Error("Hay que esperar unos segundos y seguir");
+      throw new Error(`No pude escuchar esa parte (${res.status}) ${detalle.slice(0, 120)}`);
+    }
+    const json = (await res.json()) as { text?: string };
+    return { texto: (json.text ?? "").trim() };
+  });
+
 export type Frase = { t0: number; t1: number; txt: string };
 
 /** Lista los guiones con marcas de tiempo que hay guardados en el proyecto. */
