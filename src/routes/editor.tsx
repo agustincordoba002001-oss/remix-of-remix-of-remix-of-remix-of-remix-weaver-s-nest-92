@@ -19,6 +19,8 @@ import {
   type AjusteVoz,
   type Expresion,
 } from "@/lib/voz-imitada";
+import { leerTramos } from "@/lib/leer-video";
+
 
 export const Route = createFileRoute("/editor")({
   head: () => ({
