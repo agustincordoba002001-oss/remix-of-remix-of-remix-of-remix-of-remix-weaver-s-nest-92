@@ -30,6 +30,10 @@ OUT = os.environ.get('OUT', '/mnt/documents/titanic_completo.mp4')
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from guion_titanic import GUION  # noqa: E402
 
+assert len(MARKS) == len(GUION), 'la cantidad de marcas no coincide con el guion'
+for _i, (_mark, _scene) in enumerate(zip(MARKS, GUION), 1):
+    assert _mark['txt'] == _scene['txt'], f'frase {_i} desalineada entre audio y dibujo'
+
 FONT_FILE = subprocess.run(['fc-match', '-f', '%{file}', 'DejaVu Sans Condensed:bold'],
                            capture_output=True, text=True, check=True).stdout
 _CACHE = {}
@@ -138,15 +142,18 @@ def build_screens():
             els.append(dict(im=la, x=zona_x + (zona_w - la.width) // 2, y=y,
                             rows=len(lines)))
             y += la.height + 34
-        hablado = max(1.0, m['t1'] - m['t0'])
-        # El dibujo y los títulos se revelan en la primera mitad de la escena,
-        # así el espectador ve la imagen completa mientras sigue el relato.
-        per = max(0.45, min(hablado * 0.55 / max(1, len(els)), 2.2))
+        # Repartir el trazado a lo largo de casi toda la frase. Antes se imponía
+        # un máximo de 2,2 s y el dibujo quedaba terminado cuando la voz todavía
+        # estaba desarrollando la idea, que se percibía como otro adelanto.
+        disponible = max(0.25, m['t1'] - reveal_t0)
+        solape = 0.88
+        recorrido = 1 + solape * max(0, len(els) - 1)
+        per = max(0.20, disponible * 0.90 / recorrido)
         cur = reveal_t0
         for el in els:
             el['t0'] = cur
             el['t1'] = cur + per
-            cur += per * 0.82
+            cur += per * solape
         screens.append(dict(t0=scene_t0, t1=end, els=els))
     return screens
 
