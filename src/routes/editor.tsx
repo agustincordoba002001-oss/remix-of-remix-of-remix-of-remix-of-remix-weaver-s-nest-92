@@ -12,6 +12,7 @@ import {
   generarVozFrase,
   guardarCorrecciones,
   listarGuiones,
+  transcribirPedazo,
 } from "@/lib/edicion.functions";
 import {
   ajustesDesdeExpresion,
