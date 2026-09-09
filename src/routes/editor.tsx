@@ -124,7 +124,8 @@ export function Editor() {
     setLeyendo(true);
     setPaso(0);
     try {
-      const { duracion, tramos } = await leerTramos(f, setPaso);
+      const { duracion, tramos, sonido: son } = await leerTramos(f, setPaso);
+      setSonido(son);
       if (!tramos.length) {
         toast.error("No escuché voz en este video");
         return;
