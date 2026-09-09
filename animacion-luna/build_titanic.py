@@ -100,8 +100,10 @@ def build_screens():
     screens = []
     for i, s in enumerate(GUION):
         m = MARKS[i]
-        t0 = max(0.0, m['t0'] - 0.3)
-        end = max(0.0, MARKS[i + 1]['t0'] - 0.3) if i + 1 < len(MARKS) else DUR
+        # La escena empieza exactamente cuando empieza el relato y termina
+        # cuando empieza el siguiente, para que cada dibujo acompañe a su frase.
+        t0 = m['t0']
+        end = MARKS[i + 1]['t0'] if i + 1 < len(MARKS) else DUR
         els = []
         k = clave(i)
         if k:
@@ -126,12 +128,14 @@ def build_screens():
                             rows=len(lines)))
             y += la.height + 34
         hablado = max(1.0, m['t1'] - m['t0'])
-        per = max(0.45, min(hablado * 0.62 / max(1, len(els)), 2.6))
+        # El dibujo y los títulos se revelan en la primera mitad de la escena,
+        # así el espectador ve la imagen completa mientras sigue el relato.
+        per = max(0.45, min(hablado * 0.55 / max(1, len(els)), 2.2))
         cur = t0
         for el in els:
             el['t0'] = cur
             el['t1'] = cur + per
-            cur += per * 0.84
+            cur += per * 0.82
         screens.append(dict(t0=t0, t1=end, els=els))
     return screens
 
